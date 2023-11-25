@@ -1,74 +1,67 @@
-from rest_framework import serializers
-
-from app_habit.models import Habit
+from rest_framework.serializers import ValidationError
 
 
-class RelatedAndAwardValidator:
-    """
-    Исключить одновременный выбор связанной привычки и указания вознаграждения.
-    """
+class RewardAndRelatedValidator:
+    def __init__(self, reward, related):
+        self.reward = reward
+        self.related = related
 
-    def __call__(self, value):
-        related_habit = bool(dict(value).get("related_habit"))
-        award = bool(dict(value).get("award"))
-
-        if related_habit and award:
-            raise serializers.ValidationError(
-                "У привычки не может быть одновременно "
-                "вознаграждения и связанной привычки")
+    def __call__(self, values):
+        reward = dict(values).get(self.reward)
+        related = dict(values).get(self.related)
+        if reward and related:
+            raise ValidationError('Необходимо выбрать только вознаграждение или связанную привычку')
 
 
-class HabitTimeCompleteValidator:
-    """
-    Время выполнения должно быть не больше 120 секунд.
-    """
+class TimeToCompleteValidator:
 
-    def __call__(self, value):
-        time_complete = dict(value).get("time_complete")
+    def __init__(self, duration):
+        self.duration = duration
 
-        if isinstance(time_complete, int) and time_complete > 120:
-            raise serializers.ValidationError(
-                "Длительность привычки не может быть больше 120 секунд")
+    def __call__(self, values):
+        duration = dict(values).get(self.duration)
+        if duration > 120:
+            raise ValidationError('Время выполнения не должно превышать 120 секунд')
 
 
-class HabitRelatedHabitIsPleasantValidator:
-    """
-    В связанные привычки могут попадать
-    только привычки с признаком приятной привычки.
-    """
+class RelatedPleasantValidator:
 
-    def __call__(self, value):
-        related_habit = dict(value).get("related_habit")
-        if related_habit:
-            habit = Habit.objects.get(pk=related_habit.id)
-            if not habit.is_pleasant:
-                raise serializers.ValidationError(
-                    "Связанная привычка должна быть приятной")
+    def __init__(self, pleasant):
+        self.pleasant = pleasant
+
+    def __call__(self, values):
+        habit = dict(values).get(self.pleasant)
+        if habit:
+            if not habit.pleasant_sign:
+                raise ValidationError('Связанная привычка должна быть приятной')
 
 
-class HabitPleasantValidator:
-    """
-    У приятной привычки не может быть вознаграждения или связанной привычки.
-    """
+class PleasantHabitValidator:
+    def __init__(self, pleasant, reward, related):
+        self.reward = reward
+        self.related = related
+        self.pleasant = pleasant
 
-    def __call__(self, value):
-        is_pleasant = dict(value).get("is_pleasant")
-        award = bool(dict(value).get("award"))
-        related_habit = bool(dict(value).get("related_habit"))
+    def __call__(self, values):
+        reward = dict(values).get(self.reward)
+        related = dict(values).get(self.related)
+        pleasant = dict(values).get(self.pleasant)
 
-        if is_pleasant and award or is_pleasant and related_habit:
-            raise serializers.ValidationError(
-                "У приятной привычки не может быть "
-                "вознаграждения или связанной привычки.")
+        if pleasant and reward:
+            raise ValidationError('У приятной привычки не может быть вознаграждения')
+        if pleasant and related:
+            raise ValidationError('У приятной привычки не может быть связанной привычки')
 
 
 class HabitFrequencyValidator:
-    """
-    Нельзя выполнять привычку реже, чем 1 раз в 7 дней.
-    """
 
-    def __call__(self, value):
-        frequency = dict(value).get("frequency")
-        if isinstance(frequency, int) and frequency > 7:
-            raise serializers.ValidationError(
-                "Привычка не должна выполняться реже чем раз в 7 дней")
+    def __init__(self, frequency, pleasant_sign):
+        self.frequency = frequency
+        self.pleasant_sign = pleasant_sign
+
+    def __call__(self, values):
+        frequency = dict(values).get(self.frequency)
+        pleasant_sign = dict(values).get(self.pleasant_sign)
+        if not pleasant_sign:
+            if frequency > 7:
+                raise ValidationError('Привычка должна выполняться не менее одного раза в неделю!')

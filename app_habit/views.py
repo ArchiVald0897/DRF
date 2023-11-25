@@ -1,50 +1,70 @@
+from django.shortcuts import render
 from rest_framework import generics
 
 from app_habit.models import Habit
 from app_habit.paginators import HabitPaginator
-from app_habit.serializers import HabitSerializers
+from app_habit.permissions import IsOwnerOrSuperuser
+from app_habit.serializers import HabitSerializer
 
 
 class HabitCreateAPIView(generics.CreateAPIView):
-    """Создание привычки"""
-    serializer_class = HabitSerializers
+    """ Представление создания новой привычки """
+    serializer_class = HabitSerializer
 
-
-class HabitListAPIView(generics.ListAPIView):
-    """Просмотр всех привычек, но не более 5 на странице."""
-    serializer_class = HabitSerializers
-    pagination_class = HabitPaginator
-
-    def get_queryset(self):
-        return Habit.objects.filter(user=self.request.user)
-
-
-class HabitPublicListAPIView(generics.ListAPIView):
-    """Просмотр всех привычек."""
-    serializer_class = HabitSerializers
-
-    def get_queryset(self):
-        return Habit.objects.filter(is_public=True)
-
-
-class HabitRetrieveAPIView(generics.RetrieveAPIView):
-    """Просмотр привычки по ID"""
-    serializer_class = HabitSerializers
-
-    def get_queryset(self):
-        return Habit.objects.filter(user=self.request.user)
+    def perform_create(self, serializer):
+        """
+        Метод присвоения владельца каждой привычке
+        :param serializer:
+        :return:
+        """
+        new_habit = serializer.save()
+        new_habit.owner = self.request.user
+        new_habit.save()
 
 
 class HabitUpdateAPIView(generics.UpdateAPIView):
-    """Редактирование привычки"""
-    serializer_class = HabitSerializers
+    """ Представление изменения привычки """
+    serializer_class = HabitSerializer
+    queryset = Habit.objects.all()
+    permission_classes = [IsOwnerOrSuperuser]
+
+
+class HabitListAPIView(generics.ListAPIView):
+    """ Представление вывода всех привычек пользователя """
+    serializer_class = HabitSerializer
+    queryset = Habit.objects.all()
+    pagination_class = HabitPaginator
 
     def get_queryset(self):
-        return Habit.objects.filter(user=self.request.user)
+        """
+        Переопределение метода get_queryset,
+        выводим только привычки, созданные пользователем
+        :return: набор объектов класса Habit
+        """
+        queryset = super().get_queryset()
+        queryset = queryset.filter(owner=self.request.user)
+        return queryset
+
+
+class HabitPublicListAPIView(generics.ListAPIView):
+    """ Представление вывода всех публичных привычек """
+    serializer_class = HabitSerializer
+    queryset = Habit.objects.all()
+    pagination_class = HabitPaginator
+
+    def get_queryset(self):
+        """
+        Переопределение метода get_queryset,
+        выводим только привычки с признаком 'Публичная'
+        :return: набор объектов класса Habit
+        """
+        queryset = super().get_queryset()
+        queryset = queryset.filter(public_sign=True)
+        return queryset
 
 
 class HabitDestroyAPIView(generics.DestroyAPIView):
-    """Удаление привычки"""
-
-    def get_queryset(self):
-        return Habit.objects.filter(user=self.request.user)
+    """ Представление удаления привычки пользователя """
+    serializer_class = HabitSerializer
+    queryset = Habit.objects.all()
+    permission_classes = [IsOwnerOrSuperuser]

@@ -1,60 +1,72 @@
-from datetime import datetime, timedelta
+import datetime
 
-import requests
 from celery import shared_task
-from django.conf import settings
+from django.utils import timezone
 
 from app_habit.models import Habit
-from app_habit.telegram import send_message
-from users.models import User
-
-URL = settings.TELEGRAM_URL_BOT
-TOKEN = settings.TELEGRAM_TOKEN
+from app_habit.services import send_message
 
 
 @shared_task
-def send_tg_message():
-    """Отправка сообщения в телеграм"""
-    time_now = datetime.now()
-    start_time = time_now - timedelta(minutes=10)
-    finish_time = time_now + timedelta(minutes=10)
-    habits = Habit.objects.filter(time__gte=start_time).filter(time__lte=finish_time)
+def send_habit_task():
+    """
+    Функция формирования сообщений пользователю
+    :return: None
+    """
+    current_date = timezone.now()  # Получаем текущую дату и время
+    print(current_date)
+    # Получаем все привычки, которые должны выполниться и не имеют признака приятной привычки
+    tasks = Habit.objects.filter(habit_datetime__lte=current_date, pleasant_sign=False)
 
-    for h in habits:
-        action = h.action
-        place = h.place
-        time = h.time
-        time_complete = h.time_complete
-        user_tg = h.user.telegram
+    # Если список не пуст - перебираем объекты класса "Привычка"
+    if tasks is not None:
+        for task in tasks:
+            # Получаем необходимые для рассылки пользователю данные
+            habit_datetime = task.habit_datetime
+            time_to_complete = task.time_to_complete
+            frequency = task.frequency
+            # Получаем время на выполнение задания
+            time_delta = habit_datetime + datetime.timedelta(seconds=time_to_complete)
+            # Получаем время, когда задание должно быть запущено в следующий раз
+            next_date = habit_datetime + datetime.timedelta(days=frequency)
+            place = task.place
+            action = task.action
+            launched = task.launched
 
-        updates = get_updates()
-        if updates['ok']:
-            parser_updates(updates['result'])
+            # Если задание запущено и время на выполнение вышло
+            if launched and time_delta <= current_date:
 
-        chat_id = User.objects.get(telegram=user_tg).chat_id
+                # Формируем сообщение о том, как пользователь может себя вознаградить
+                if task.related_habit:
+                    message = f'Ваше вознаграждение {task.related_habit.action}, место: {task.related_habit.place}'
+                elif task.reward:
+                    message = f'Ваше вознаграждение {task.reward}'
+                else:
+                    message = f'Вы выполнили приятную привычку'
 
-        text = (f'Привычка {action} '
-                f'в {place} '
-                f'должна выполняться {time} '
-                f'на протяжении {time_complete}')
-        send_message(text, chat_id)
+                # Проверяем указал ли пользователь свой ID telegram
+                if task.owner.telegram_id:
+                    send_message(message, task.owner.telegram_id)
+                print(message)
 
-        h.time += timedelta(days=h.frequency)
-        h.save()
+                # Завершаем выполнение задания, в поле даты записываем дату следующего выполнения
+                task.launched = False
+                task.habit_datetime = next_date
+                task.save()
 
+            # Если задание не запущено - формируем сообщение о начале задания
+            elif not launched:
+                message = f'Настало время {habit_datetime}! Выполните {action}, место: {place}'
 
-def get_updates():
-    """Получает CHAT_ID из ника telegram"""
+                # Проверяем указал ли пользователь свой ID telegram
+                if task.owner.telegram_id:
+                    send_message(message, task.owner.telegram_id)
+                print(message)
 
-    response = requests.get(f'{URL}{TOKEN}/getUpdates')
-    # print(response.json())
-    return response.json()
+                # Устанавливаем флаг - задание выполняется
+                task.launched = True
+                task.save()
 
-
-def parser_updates(updates):
-    for u in updates:
-        user = User.objects.get(telegram=u['message']['chat']['username'])
-        if User.objects.filter(telegram=user).exist():
-            user.chat_id = u['message']['chat']['id']
-            user.update_id = u['update_id']
-            user.save()
+            # В противном случае ничего не делаем, пропускаем цикл
+            else:
+                continue

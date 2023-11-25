@@ -1,18 +1,16 @@
-from django.urls import path
-from app_habit.apps import AppHabitConfig
-from app_habit.views import (HabitListAPIView, HabitCreateAPIView,
-                             HabitRetrieveAPIView, HabitUpdateAPIView,
-                             HabitDestroyAPIView, HabitPublicListAPIView)
+from django.urls import path, include
 
-app_name = AppHabitConfig.name
+from app_habit.apps import TheHabitsConfig
+from app_habit.views import HabitCreateAPIView, HabitUpdateAPIView, HabitListAPIView, HabitPublicListAPIView, \
+    HabitDestroyAPIView
+
+app_name = TheHabitsConfig.name
 
 urlpatterns = [
-    path('', HabitPublicListAPIView.as_view(), name='habits_is_public'),
-    path('habits/', HabitListAPIView.as_view(), name='habits'),
-    path('create/', HabitCreateAPIView.as_view(), name='habit_create'),
-    path('<int:pk>/', HabitRetrieveAPIView.as_view(), name='habit'),
-    path('update/<int:pk>/', HabitUpdateAPIView.as_view(),
-         name='habit_update'),
-    path('delete/<int:pk>/', HabitDestroyAPIView.as_view(),
-         name='habit_delete'),
+
+    path('create/', HabitCreateAPIView.as_view(), name='create'),
+    path('update/<int:pk>/', HabitUpdateAPIView.as_view(), name='update'),
+    path('list/', HabitListAPIView.as_view(), name='list'),
+    path('public/', HabitPublicListAPIView.as_view(), name='public'),
+    path('delete/<int:pk>/', HabitDestroyAPIView.as_view(), name='delete')
 ]

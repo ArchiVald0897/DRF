@@ -1,157 +1,203 @@
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 
 from app_habit.models import Habit
 from users.models import User
 
 
 class HabitTestCase(APITestCase):
-    """Тестирование привычек"""
+    """
+    Класс тестирования эндпоинтов привычек
+    """
 
-    def setUp(self):
-        """Подготовка данных перед каждым тестом"""
-
-        # Создание пользователя для тестирования
-        self.user = User.objects.create(telegram='mikhapol',
-                                        email='test@test.ru',
-                                        is_staff=True,
-                                        is_superuser=True,
-                                        is_active=True)
-
-        self.user.set_password('qwerty')  # Устанавливаем пароль
-        self.user.save()  # Сохраняем изменения пользователя в базе данных
-
-        # Создание привычки для тестирования
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.user = User.objects.create(email='test@test.com', password='test', is_staff=True, is_superuser=True)
+        self.client.force_authenticate(user=self.user)
         self.habit = Habit.objects.create(
-            user=self.user,
-            place="Парк",
-            time="12:00",
-            action="Глазеть на жопы",
-            time_complete=20,
+            action='test action',
+            habit_datetime='2023-11-02T23:53:57.486000Z',
+            place='test place',
+            frequency=2,
+            reward='test reward',
+            time_to_complete=120,
+            public_sign=True,
+            launched=False,
+            related_habit=None
         )
 
-        # Запрос токена для авторизации
-        response = self.client.post('/users/token/', data={'email': self.user.email, 'password': 'qwerty'})
-
-        self.access_token = response.data.get('access')  # Токен для авторизации
-
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)  # Авторизация пользователя
-
     def test_create_habit(self):
-        """Тестирование создания привычки"""
-
-        # Данные для создания привычки
+        """
+        Метод тестирования эндпоинта создания привычки
+        :return:
+        """
         data = {
-            "user": 1,
-            "place": "Парк",
-            "time": "12:00",
-            "action": "Глазеть на жопы",
-            "time_complete": 20
+            "action": "test action",
+            "habit_datetime": "2023-11-02 23:53:57,486",
+            "place": "test place",
+            "frequency": 2,
+            "reward": "test reward",
+            "time_to_complete": 120
+
         }
+        response = self.client.post(
+            reverse('the_habits:create'),
+            data=data
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED
+        )
 
-        response = self.client.post(reverse('app_habit:habit_create'), data=data)  # Отправка запроса
+        print(response.json())
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)  # Проверка статуса ответа
-
-        self.assertEqual(Habit.objects.all().count(), 2)  # Проверка наличия в базе данных новой записи
-
-    def test_public_list_habit(self):
-        """Тестирование списка просмотра публичных привычек"""
-
-        response = self.client.get(reverse('app_habit:habits_is_public'))  # Запрос на получение списка привычек
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)  # Проверка ответа на запрос
-
-        # Проверка корректности выводимых данных
-        self.assertEqual(response.json(), [])
-
-    def test_list_habit(self):
-        """Тестирование списка просмотра личных привычек"""
-
-        response = self.client.get(reverse('app_habit:habits'))  # Запрос на получение списка личных привычек
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)  # Проверка ответа на запрос
-
-        # Проверка корректности выводимых данных
-        self.assertEqual(response.json()['results'],
-                         [{
-                             "id": 1,
-                             "place": "Парк",
-                             "time": "12:00:00",
-                             "action": "Глазеть на жопы",
-                             "is_pleasant": False,
-                             "frequency": 1,
-                             "award": None,
-                             "time_complete": 20,
-                             "is_public": False,
-                             "user": 1,
-                             "related_habit": None
-                         }])
+        self.assertEqual(
+            Habit.objects.all().count(),
+            2
+        )
+        self.assertEqual(
+            response.json(),
+            {
+                'id': 2,
+                'action': 'test action',
+                'habit_datetime': '2023-11-02T23:53:57.486000Z',
+                'place': 'test place',
+                'pleasant_sign': False,
+                'frequency': 2,
+                'reward': 'test reward',
+                'time_to_complete': 120,
+                'public_sign': False,
+                'launched': False,
+                'related_habit': None,
+                'owner': 1
+            }
+        )
 
     def test_update_habit(self):
-        """Тестирование редактирования привычки"""
+        """
+        Метод тестирования эндпоинта изменения привычки
+        :return:
+        """
 
-        # Данные для обновления привычки
-        data = {
-            "user": 1,
-            "place": "Пляж",
-            "time": "10:00",
-            "action": "Глазеть на сиськи",
-            "time_complete": 119
+        new_data = {
+            "action": "test action2",
+            "habit_datetime": "2023-11-02 23:53:57,486",
+            "place": "test place2",
+            "frequency": 4,
+            "reward": "test reward",
+            "time_to_complete": 120
+
         }
+        print(self.habit.pk)
+        response = self.client.put(
+            reverse('the_habits:update', args=str(self.habit.pk)),
+            data=new_data
+        )
 
-        # Запрос на обновление урока
-        response = self.client.put(reverse('app_habit:habit_update', args=[self.habit.pk]), data=data)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)  # Проверка статуса ответа
+        self.assertEqual(
+            response.json(),
+            {
+                'id': self.habit.pk,
+                'action': 'test action2',
+                'habit_datetime': '2023-11-02T23:53:57.486000Z',
+                'place': 'test place2',
+                'pleasant_sign': False,
+                'frequency': 4,
+                'reward': 'test reward',
+                'time_to_complete': 120,
+                'public_sign': False,
+                'launched': False,
+                'related_habit': None,
+                'owner': None
+            }
+        )
+        print(self.habit.pk)
 
-        # Проверка корректности выводимых данных
-        self.assertEqual(response.json(),
-                         {
-                             "id": 1,
-                             "place": "Пляж",
-                             "time": "10:00:00",
-                             "action": "Глазеть на сиськи",
-                             "is_pleasant": False,
-                             "frequency": 1,
-                             "award": None,
-                             "time_complete": 119,
-                             "is_public": False,
-                             "user": 1,
-                             "related_habit": None
-                         })
+    def test_list_habit(self):
+        """
+        Метод тестирования эндпоинта изменения привычки
+        :return:
+        """
 
-    def test_get_habit_by_id(self):
-        """Тестирование получения привычки по id"""
+        response = self.client.get(
+            reverse('the_habits:list'),
+        )
 
-        # Запрос на получение привычки по id
-        response = self.client.get(reverse('app_habit:habit', args=[self.habit.pk]))
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)  # Проверка статуса ответа
+        self.assertEqual(
+            response.json(),
+            {
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': []
+            }
+        )
 
-        # Проверка корректности выводимых данных
-        self.assertEqual(response.json(),
-                         {
-                             "id": 1,
-                             "place": "Парк",
-                             "time": "12:00:00",
-                             "action": "Глазеть на жопы",
-                             "is_pleasant": False,
-                             "frequency": 1,
-                             "award": None,
-                             "time_complete": 20,
-                             "is_public": False,
-                             "user": 1,
-                             "related_habit": None
-                         })
+    def test_public_habit(self):
+        """
+        Метод тестирования эндпоинта изменения привычки
+        :return:
+        """
 
-    def test_destroy_habit(self):
-        """Тестирование удаления привычки"""
+        response = self.client.get(
+            reverse('the_habits:public'),
+        )
 
-        # Запрос на удаление урока
-        response = self.client.delete(reverse('app_habit:habit_delete', args=[self.habit.pk]))
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
 
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)  # Проверка статуса ответа
+        self.assertEqual(
+            response.json(),
+            {
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [
+                    {
+                        'action': 'test action',
+                        'frequency': 2,
+                        'habit_datetime': '2023-11-02T23:53:57.486000Z',
+                        'id': 5,
+                        'launched': False,
+                        'owner': None,
+                        'place': 'test place',
+                        'pleasant_sign': False,
+                        'public_sign': True,
+                        'related_habit': None,
+                        'reward': 'test reward',
+                        'time_to_complete': 120
+                    }
+                ]
+            }
+        )
 
-        self.assertEqual(Habit.objects.all().count(), 0)  # Проверка количества записей привычек в БД
+    def test_delete_habit(self):
+        """
+        Метод тестирования эндпоинта удаления привычки
+        :return:
+        """
+        response = self.client.delete(
+            reverse('the_habits:delete', args=str(3)),
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT
+        )
+
+    def tearDown(self):
+        Habit.objects.all().delete()
+        self.habit.delete()
