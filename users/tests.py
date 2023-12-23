@@ -1,27 +1,39 @@
+from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 
 
-class UserTestCase(APITestCase):
+class HabitTestCase(APITestCase):
+    """
+    Класс тестирования эндпоинтов пользователя
+    """
 
     def setUp(self) -> None:
-        self.url = '/users/user/'
-        self.data = {
-            'email': 'test@test.ru',
-            'password': 'test'
-        }
+        self.client = APIClient()
 
     def test_create_user(self):
-        """Тестирование создание пользователя"""
+        """
+        Тестирование эндпоинта создания пользователя
+        :return: None
+        """
+        data = {
+            "email": "test@test.ru",
+            "password": "123456",
+        }
 
-        response = self.client.post(f'{self.url}', data=self.data)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.client.post(
+            reverse('users:user_create'),
+            data=data
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED
+        )
+        print(response.json())
 
         self.assertEqual(
             response.json(),
             {
-                'email': 'test@test.ru',
-                'password': 'test',
+                'id': 6, 'first_name': '', 'email': 'test@test.ru'
             }
         )
